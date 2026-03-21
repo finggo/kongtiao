@@ -154,7 +154,7 @@
         </div>
         
         <div class="timestamp" id="timestamp-container">
-            最后更新时间：<span id="timestamp">--</span>
+            Python上传时间：<span id="timestamp">--</span>
             <span id="status-tag" class="status-tag"></span>
         </div>
         
@@ -170,7 +170,7 @@
         let lastRealData = JSON.parse(localStorage.getItem('lastRealData')) || {
             temperature: null,
             humidity: null,
-            timestamp: null
+            upload_time: null
         };
 
         // 页面加载自动刷新 + 30秒定时刷新
@@ -184,8 +184,8 @@
         };
 
         /**
-         * 核心函数：获取数据并更新UI
-         * @param {Object} data - 数据对象
+         * 核心函数：更新UI显示
+         * @param {Object} data - 数据对象（包含Python上传的upload_time）
          * @param {Boolean} isNewData - 是否是新的真实数据
          */
         function updateUI(data, isNewData = false) {
@@ -203,12 +203,12 @@
 
             // 显示数据或无数据提示
             if (data.temperature && data.humidity) {
-                // 有数据：显示真实数据
+                // 有数据：显示Python上传的时间
                 tempEl.textContent = data.temperature;
                 tempEl.className = 'value';
                 humiEl.textContent = data.humidity;
                 humiEl.className = 'value';
-                timeEl.textContent = data.timestamp;
+                timeEl.textContent = data.upload_time || '未知时间';
                 timeContainer.className = 'timestamp';
                 timeEl.className = '';
                 
@@ -242,11 +242,11 @@
             humiEl.textContent = '加载中...';
             humiEl.className = 'value loading';
 
-            // 发起API请求
+            // 发起API请求（空数据请求，触发后端返回缓存）
             fetch(API_UPLOAD_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({}), // 空数据请求，触发后端返回缓存
+                body: JSON.stringify({}),
                 timeout: 8000
             })
             .then(res => {
@@ -257,7 +257,7 @@
                 const data = result.data || {};
                 // 区分是否是新的真实数据
                 const isNewData = result.hasRealData === true;
-                // 优先显示接口返回的最后一次数据，无则用本地缓存
+                // 优先显示接口返回的Python上传时间
                 const showData = (data.temperature ? data : lastRealData);
                 updateUI(showData, isNewData);
                 console.log(`✅ 数据加载成功 | 实时数据: ${isNewData}`, showData);
