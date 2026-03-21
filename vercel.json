@@ -1,20 +1,14 @@
 {
   "rewrites": [
     { "source": "/api/upload", "destination": "/api/upload.js" },
-    { "source": "/", "destination": "/public/kongtiao.html" }
+    { "source": "/", "destination": "/kongtiao.html" }
   ],
   "headers": [
     {
-      "source": "/public/data.json",
+      "source": "/data.json",
       "headers": [
         { "key": "Access-Control-Allow-Origin", "value": "*" },
         { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
-      ]
-    },
-    {
-      "source": "/public/(.*)",
-      "headers": [
-        { "key": "Cache-Control", "value": "no-cache" }
       ]
     }
   ]
