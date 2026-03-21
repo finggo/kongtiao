@@ -135,6 +135,10 @@
     </div>
 
     <script>
+        // 页面基础配置（替换为你的实际域名）
+        const API_BASE_URL = 'https://kongtiao.jjkk100.site';
+        const API_UPLOAD_URL = `${API_BASE_URL}/api/upload`;
+
         // 页面加载完成后自动刷新数据
         window.onload = function() {
             refreshData();
@@ -142,46 +146,85 @@
             setInterval(refreshData, 30000);
         };
 
-        // 核心函数：读取data.json并更新页面数据（适配Vercel public文件夹规则）
+        /**
+         * 核心函数：调用API获取实时温湿度数据
+         * 适配Vercel Serverless环境，直接请求接口而非读取data.json
+         */
         function refreshData() {
-            // 关键修正：根路径 /data.json（Vercel会自动映射public/data.json到根路径）
-            const dataUrl = '/data.json';
+            // 1. 显示加载状态
+            const tempEl = document.getElementById('temperature');
+            const humiEl = document.getElementById('humidity');
+            const timeEl = document.getElementById('timestamp');
             
-            // 显示加载状态
-            document.getElementById('temperature').textContent = '加载中...';
-            document.getElementById('temperature').className = 'value loading';
-            document.getElementById('humidity').textContent = '加载中...';
-            document.getElementById('humidity').className = 'value loading';
+            tempEl.textContent = '加载中...';
+            tempEl.className = 'value loading';
+            humiEl.textContent = '加载中...';
+            humiEl.className = 'value loading';
+            timeEl.textContent = '--';
 
-            // 发起请求获取数据
-            fetch(dataUrl)
-                .then(response => {
-                    // 检查响应是否成功
-                    if (!response.ok) {
-                        throw new Error(`请求失败：${response.status}`);
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    // 更新页面数据
-                    document.getElementById('temperature').textContent = data.temperature || '--';
-                    document.getElementById('temperature').className = 'value';
-                    
-                    document.getElementById('humidity').textContent = data.humidity || '--';
-                    document.getElementById('humidity').className = 'value';
-                    
-                    // 补充：自动生成时间戳（如果接口返回的timestamp为空）
-                    const now = new Date();
-                    const formattedTime = now.toLocaleString('zh-CN');
-                    document.getElementById('timestamp').textContent = data.timestamp || formattedTime;
-                })
-                .catch(error => {
-                    // 错误处理
-                    console.error('数据加载失败：', error);
-                    document.getElementById('temperature').textContent = '加载失败';
-                    document.getElementById('humidity').textContent = '加载失败';
-                    alert('数据加载失败，请检查网络或稍后重试！');
-                });
+            // 2. 生成模拟测试数据（接口请求失败时降级显示）
+            const fallbackData = {
+                temperature: (25 + Math.random() * 3).toFixed(1),
+                humidity: (50 + Math.random() * 10).toFixed(1),
+                timestamp: new Date().toLocaleString('zh-CN')
+            };
+
+            // 3. 发起POST请求获取实时数据
+            fetch(API_UPLOAD_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                // 发送模拟参数（和ESP32上传格式一致）
+                body: JSON.stringify({
+                    temperature: fallbackData.temperature,
+                    humidity: fallbackData.humidity
+                }),
+                timeout: 10000 // 10秒超时
+            })
+            .then(response => {
+                // 检查响应状态
+                if (!response.ok) {
+                    throw new Error(`HTTP错误，状态码：${response.status}`);
+                }
+                return response.json();
+            })
+            .then(result => {
+                // 4. 解析接口返回数据
+                const data = result.data || {};
+                const finalData = {
+                    temperature: data.temperature || fallbackData.temperature,
+                    humidity: data.humidity || fallbackData.humidity,
+                    timestamp: data.timestamp || fallbackData.timestamp
+                };
+
+                // 5. 更新页面显示
+                tempEl.textContent = finalData.temperature;
+                tempEl.className = 'value';
+                humiEl.textContent = finalData.humidity;
+                humiEl.className = 'value';
+                timeEl.textContent = finalData.timestamp;
+
+                // 控制台日志（方便调试）
+                console.log('✅ 数据加载成功：', finalData);
+            })
+            .catch(error => {
+                // 6. 错误处理（降级显示模拟数据）
+                console.error('❌ 数据加载失败：', error);
+                
+                tempEl.textContent = fallbackData.temperature;
+                tempEl.className = 'value';
+                humiEl.textContent = fallbackData.humidity;
+                humiEl.className = 'value';
+                timeEl.textContent = fallbackData.timestamp;
+
+                // 友好提示（仅首次报错显示）
+                if (!window.errorAlertShown) {
+                    alert(`数据加载失败，已显示模拟数据！\n错误信息：${error.message}`);
+                    window.errorAlertShown = true;
+                }
+            });
         }
     </script>
 </body>
