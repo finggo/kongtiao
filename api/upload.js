@@ -1,9 +1,9 @@
-// api/upload.js - 接收Python上传时间的最终版
+// api/upload.js - 终极版：Python停止后数据固定不变
 let lastRealData = {
   temperature: null,
   humidity: null,
-  upload_time: null  // 缓存Python上传的时间，而非服务器时间
-};
+  upload_time: null
+}; // 仅缓存Python上传的真实数据，不生成模拟值
 
 export default async function handler(req, res) {
   // 1. 只允许 POST 请求
@@ -21,18 +21,18 @@ export default async function handler(req, res) {
     const body = req.body || {};
     const { temperature, humidity, upload_time } = body;
     
-    // 3. 判断是否为真实数据
+    // 3. 判断是否为Python上传的真实数据
     const isRealData = !!(
       temperature && !isNaN(parseFloat(temperature)) &&
       humidity && !isNaN(parseFloat(humidity))
     );
 
-    // 4. 更新最后一次真实数据缓存（优先使用Python上传的时间）
+    // 4. 仅当有Python真实数据时，才更新缓存（核心：无新数据则不更新）
     if (isRealData) {
       lastRealData = {
         temperature: parseFloat(temperature).toFixed(1),
         humidity: parseFloat(humidity).toFixed(1),
-        // 核心：使用Python上传的时间，无则用服务器北京时间兜底
+        // 使用Python上传的时间，无则用服务器北京时间兜底
         upload_time: upload_time || new Date().toLocaleString('zh-CN', {
           year: 'numeric',
           month: '2-digit',
@@ -45,16 +45,12 @@ export default async function handler(req, res) {
       };
     }
 
-    // 5. 构造返回数据（返回Python上传的时间）
+    // 5. 构造返回数据（固定返回最后一次缓存数据，不生成新值）
     const responseData = {
       success: true,
-      message: isRealData ? '数据上传成功' : '无真实数据，返回最后一次记录',
-      hasRealData: isRealData,
-      data: lastRealData.temperature ? lastRealData : {
-        temperature: null,
-        humidity: null,
-        upload_time: null
-      }
+      message: isRealData ? '数据上传成功' : '无新数据，返回最后一次记录',
+      hasRealData: isRealData, // 仅Python上传时为true，刷新时为false
+      data: lastRealData // 核心：始终返回缓存值，不生成新模拟值
     };
 
     // 6. 返回响应
@@ -62,7 +58,7 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('[API 错误]', error);
-    // 出错时仍返回最后一次缓存数据
+    // 出错时仍返回缓存的最后一次数据（不会变）
     return res.status(200).json({
       success: false,
       message: '服务器异常，返回最后一次记录',
