@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ESP32 空调数据监控</title>
     <style>
-        /* 页面基础样式，适配移动端+PC端 */
         * {
             margin: 0;
             padding: 0;
@@ -65,6 +64,11 @@
             font-weight: 600;
         }
         
+        .value.empty {
+            color: #dc3545;
+            font-size: 16px;
+        }
+        
         .unit {
             font-size: 16px;
             color: #718096;
@@ -76,6 +80,29 @@
             font-size: 14px;
             color: #718096;
             text-align: center;
+        }
+        
+        .timestamp.empty {
+            color: #dc3545;
+        }
+        
+        .status-tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            margin-left: 8px;
+        }
+        
+        .status-online {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .status-offline {
+            background-color: #f8d7da;
+            color: #721c24;
         }
         
         .refresh-btn {
@@ -100,7 +127,6 @@
             background-color: #004085;
         }
         
-        /* 加载中样式 */
         .loading {
             color: #9fadc7;
             font-style: italic;
@@ -127,103 +153,119 @@
             </span>
         </div>
         
-        <div class="timestamp">
+        <div class="timestamp" id="timestamp-container">
             最后更新时间：<span id="timestamp">--</span>
+            <span id="status-tag" class="status-tag"></span>
         </div>
         
         <button class="refresh-btn" onclick="refreshData()">手动刷新数据</button>
     </div>
 
     <script>
-        // 页面基础配置（替换为你的实际域名）
-        const API_BASE_URL = 'https://kongtiao.jjkk100.site';
+        // 页面基础配置
+        const API_BASE_URL = window.location.origin;
         const API_UPLOAD_URL = `${API_BASE_URL}/api/upload`;
+        
+        // 本地缓存：记录最后一次真实数据（页面刷新不丢失）
+        let lastRealData = JSON.parse(localStorage.getItem('lastRealData')) || {
+            temperature: null,
+            humidity: null,
+            timestamp: null
+        };
 
-        // 页面加载完成后自动刷新数据
-        window.onload = function() {
+        // 页面加载自动刷新 + 30秒定时刷新
+        window.onload = () => {
+            // 初始化显示最后一次缓存数据
+            if (lastRealData.temperature) {
+                updateUI(lastRealData, false);
+            }
             refreshData();
-            // 每隔30秒自动刷新一次
             setInterval(refreshData, 30000);
         };
 
         /**
-         * 核心函数：调用API获取实时温湿度数据
-         * 适配Vercel Serverless环境，直接请求接口而非读取data.json
+         * 核心函数：获取数据并更新UI
+         * @param {Object} data - 数据对象
+         * @param {Boolean} isNewData - 是否是新的真实数据
          */
-        function refreshData() {
-            // 1. 显示加载状态
+        function updateUI(data, isNewData = false) {
             const tempEl = document.getElementById('temperature');
             const humiEl = document.getElementById('humidity');
             const timeEl = document.getElementById('timestamp');
+            const timeContainer = document.getElementById('timestamp-container');
+            const statusTag = document.getElementById('status-tag');
+
+            // 更新缓存（仅当是新的真实数据时）
+            if (isNewData && data.temperature) {
+                lastRealData = { ...data };
+                localStorage.setItem('lastRealData', JSON.stringify(lastRealData));
+            }
+
+            // 显示数据或无数据提示
+            if (data.temperature && data.humidity) {
+                // 有数据：显示真实数据
+                tempEl.textContent = data.temperature;
+                tempEl.className = 'value';
+                humiEl.textContent = data.humidity;
+                humiEl.className = 'value';
+                timeEl.textContent = data.timestamp;
+                timeContainer.className = 'timestamp';
+                timeEl.className = '';
+                
+                // 更新状态标签
+                statusTag.textContent = isNewData ? '实时数据' : '最后缓存';
+                statusTag.className = `status-tag ${isNewData ? 'status-online' : 'status-offline'}`;
+            } else {
+                // 无数据：显示提示
+                tempEl.textContent = '暂无数据';
+                tempEl.className = 'value empty';
+                humiEl.textContent = '暂无数据';
+                humiEl.className = 'value empty';
+                timeEl.textContent = '从未上传过数据';
+                timeContainer.className = 'timestamp empty';
+                timeEl.className = 'empty';
+                statusTag.textContent = '';
+                statusTag.className = 'status-tag';
+            }
+        }
+
+        /**
+         * 核心函数：调用API获取数据
+         */
+        function refreshData() {
+            const tempEl = document.getElementById('temperature');
+            const humiEl = document.getElementById('humidity');
             
+            // 显示加载状态
             tempEl.textContent = '加载中...';
             tempEl.className = 'value loading';
             humiEl.textContent = '加载中...';
             humiEl.className = 'value loading';
-            timeEl.textContent = '--';
 
-            // 2. 生成模拟测试数据（接口请求失败时降级显示）
-            const fallbackData = {
-                temperature: (25 + Math.random() * 3).toFixed(1),
-                humidity: (50 + Math.random() * 10).toFixed(1),
-                timestamp: new Date().toLocaleString('zh-CN')
-            };
-
-            // 3. 发起POST请求获取实时数据
+            // 发起API请求
             fetch(API_UPLOAD_URL, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                // 发送模拟参数（和ESP32上传格式一致）
-                body: JSON.stringify({
-                    temperature: fallbackData.temperature,
-                    humidity: fallbackData.humidity
-                }),
-                timeout: 10000 // 10秒超时
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({}), // 空数据请求，触发后端返回缓存
+                timeout: 8000
             })
-            .then(response => {
-                // 检查响应状态
-                if (!response.ok) {
-                    throw new Error(`HTTP错误，状态码：${response.status}`);
-                }
-                return response.json();
+            .then(res => {
+                if (!res.ok) throw new Error(`状态码: ${res.status}`);
+                return res.json();
             })
             .then(result => {
-                // 4. 解析接口返回数据
                 const data = result.data || {};
-                const finalData = {
-                    temperature: data.temperature || fallbackData.temperature,
-                    humidity: data.humidity || fallbackData.humidity,
-                    timestamp: data.timestamp || fallbackData.timestamp
-                };
-
-                // 5. 更新页面显示
-                tempEl.textContent = finalData.temperature;
-                tempEl.className = 'value';
-                humiEl.textContent = finalData.humidity;
-                humiEl.className = 'value';
-                timeEl.textContent = finalData.timestamp;
-
-                // 控制台日志（方便调试）
-                console.log('✅ 数据加载成功：', finalData);
+                // 区分是否是新的真实数据
+                const isNewData = result.hasRealData === true;
+                // 优先显示接口返回的最后一次数据，无则用本地缓存
+                const showData = (data.temperature ? data : lastRealData);
+                updateUI(showData, isNewData);
+                console.log(`✅ 数据加载成功 | 实时数据: ${isNewData}`, showData);
             })
-            .catch(error => {
-                // 6. 错误处理（降级显示模拟数据）
-                console.error('❌ 数据加载失败：', error);
-                
-                tempEl.textContent = fallbackData.temperature;
-                tempEl.className = 'value';
-                humiEl.textContent = fallbackData.humidity;
-                humiEl.className = 'value';
-                timeEl.textContent = fallbackData.timestamp;
-
-                // 友好提示（仅首次报错显示）
-                if (!window.errorAlertShown) {
-                    alert(`数据加载失败，已显示模拟数据！\n错误信息：${error.message}`);
-                    window.errorAlertShown = true;
-                }
+            .catch(err => {
+                // 接口异常：显示本地缓存的最后一次数据
+                console.warn('⚠️ 接口异常，显示最后一次缓存数据:', err);
+                updateUI(lastRealData, false);
             });
         }
     </script>
