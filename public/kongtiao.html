@@ -86,6 +86,10 @@
             color: #dc3545;
         }
         
+        .timestamp.stop {
+            color: #ffc107;
+        }
+        
         .status-tag {
             display: inline-block;
             padding: 2px 8px;
@@ -208,9 +212,15 @@
                 tempEl.className = 'value';
                 humiEl.textContent = data.humidity;
                 humiEl.className = 'value';
-                timeEl.textContent = data.upload_time || '未知时间';
-                timeContainer.className = 'timestamp';
-                timeEl.className = '';
+                
+                // 非新数据时，添加「数据已停止更新」提示
+                if (isNewData) {
+                    timeEl.textContent = data.upload_time || '未知时间';
+                    timeContainer.className = 'timestamp';
+                } else {
+                    timeEl.textContent = `${data.upload_time || '未知时间'}（数据已停止更新）`;
+                    timeContainer.className = 'timestamp stop';
+                }
                 
                 // 更新状态标签
                 statusTag.textContent = isNewData ? '实时数据' : '最后缓存';
@@ -223,14 +233,13 @@
                 humiEl.className = 'value empty';
                 timeEl.textContent = '从未上传过数据';
                 timeContainer.className = 'timestamp empty';
-                timeEl.className = 'empty';
                 statusTag.textContent = '';
                 statusTag.className = 'status-tag';
             }
         }
 
         /**
-         * 核心函数：调用API获取数据
+         * 核心函数：调用API获取数据（无模拟值，仅返回缓存）
          */
         function refreshData() {
             const tempEl = document.getElementById('temperature');
@@ -246,7 +255,7 @@
             fetch(API_UPLOAD_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({}),
+                body: JSON.stringify({}), // 空数据，不传递任何模拟值
                 timeout: 8000
             })
             .then(res => {
@@ -255,15 +264,13 @@
             })
             .then(result => {
                 const data = result.data || {};
-                // 区分是否是新的真实数据
                 const isNewData = result.hasRealData === true;
-                // 优先显示接口返回的Python上传时间
-                const showData = (data.temperature ? data : lastRealData);
-                updateUI(showData, isNewData);
-                console.log(`✅ 数据加载成功 | 实时数据: ${isNewData}`, showData);
+                // 直接显示后端缓存的最后一次数据（不会变）
+                updateUI(data, isNewData);
+                console.log(`✅ 数据加载成功 | 新数据: ${isNewData}`, data);
             })
             .catch(err => {
-                // 接口异常：显示本地缓存的最后一次数据
+                // 接口异常：显示本地缓存的最后一次数据（不会变）
                 console.warn('⚠️ 接口异常，显示最后一次缓存数据:', err);
                 updateUI(lastRealData, false);
             });
