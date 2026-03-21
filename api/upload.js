@@ -1,9 +1,9 @@
-// api/upload.js - 带最后一次数据缓存的最终版
+// api/upload.js - 接收Python上传时间的最终版
 let lastRealData = {
   temperature: null,
   humidity: null,
-  timestamp: null
-}; // 内存缓存：记录最后一次真实数据
+  upload_time: null  // 缓存Python上传的时间，而非服务器时间
+};
 
 export default async function handler(req, res) {
   // 1. 只允许 POST 请求
@@ -12,38 +12,40 @@ export default async function handler(req, res) {
       success: false,
       message: '仅支持 POST 请求',
       hasRealData: false,
-      data: lastRealData // 返回最后一次数据（如果有）
+      data: lastRealData
     });
   }
 
   try {
-    // 2. 获取请求体数据
+    // 2. 获取请求体中的数据（包含Python上传的时间）
     const body = req.body || {};
-    const { temperature, humidity } = body;
+    const { temperature, humidity, upload_time } = body;
     
-    // 3. 判断是否为真实数据（非空且为数字）
+    // 3. 判断是否为真实数据
     const isRealData = !!(
       temperature && !isNaN(parseFloat(temperature)) &&
       humidity && !isNaN(parseFloat(humidity))
     );
 
-    // 4. 更新最后一次真实数据缓存
+    // 4. 更新最后一次真实数据缓存（优先使用Python上传的时间）
     if (isRealData) {
       lastRealData = {
         temperature: parseFloat(temperature).toFixed(1),
         humidity: parseFloat(humidity).toFixed(1),
-        timestamp: new Date().toLocaleString('zh-CN', {
+        // 核心：使用Python上传的时间，无则用服务器北京时间兜底
+        upload_time: upload_time || new Date().toLocaleString('zh-CN', {
           year: 'numeric',
           month: '2-digit',
           day: '2-digit',
           hour: '2-digit',
           minute: '2-digit',
-          second: '2-digit'
+          second: '2-digit',
+          timeZone: 'Asia/Shanghai'
         })
       };
     }
 
-    // 5. 构造返回数据（优先返回最后一次真实数据）
+    // 5. 构造返回数据（返回Python上传的时间）
     const responseData = {
       success: true,
       message: isRealData ? '数据上传成功' : '无真实数据，返回最后一次记录',
@@ -51,7 +53,7 @@ export default async function handler(req, res) {
       data: lastRealData.temperature ? lastRealData : {
         temperature: null,
         humidity: null,
-        timestamp: null
+        upload_time: null
       }
     };
 
@@ -60,7 +62,7 @@ export default async function handler(req, res) {
 
   } catch (error) {
     console.error('[API 错误]', error);
-    // 出错时仍返回最后一次真实数据
+    // 出错时仍返回最后一次缓存数据
     return res.status(200).json({
       success: false,
       message: '服务器异常，返回最后一次记录',
