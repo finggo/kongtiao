@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>空调数据监控（ESP32）</title> <!-- 可按需改标题，非必须 -->
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 0 20px; }
+    .data-card { border: 1px solid #ddd; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    .data-item { margin: 15px 0; font-size: 18px; }
+    .label { font-weight: bold; color: #333; }
+    .value { color: #0070f3; }
+    .timestamp { color: #666; font-size: 14px; margin-top: 20px; }
+    button { padding: 10px 20px; background: #0070f3; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    button:hover { background: #0051a2; }
+  </style>
+</head>
+<body>
+  <div class="data-card">
+    <h2>ESP32 空调数据监控</h2> <!-- 可按需改标题，非必须 -->
+    <div class="data-item">
+      <span class="label">温度：</span>
+      <span id="temperature" class="value">--</span> °C
+    </div>
+    <div class="data-item">
+      <span class="label">湿度：</span>
+      <span id="humidity" class="value">--</span> %
+    </div>
+    <div class="timestamp">最后更新时间：<span id="timestamp">--</span></div>
+    <button onclick="refreshData()">手动刷新</button>
+  </div>
+
+  <script>
+    // 页面加载时自动刷新数据
+    window.onload = refreshData;
+    // 每隔30秒自动刷新
+    setInterval(refreshData, 30000);
+
+    // 读取 JSON 文件并展示数据
+    function refreshData() {
+      fetch('/data.json')
+        .then(response => {
+          if (!response.ok) throw new Error('数据读取失败');
+          return response.json();
+        })
+        .then(data => {
+          document.getElementById('temperature').textContent = data.temperature;
+          document.getElementById('humidity').textContent = data.humidity;
+          document.getElementById('timestamp').textContent = data.timestamp;
+        })
+        .catch(error => {
+          console.error('错误:', error);
+          alert('数据加载失败，请稍后重试');
+        });
+    }
+  </script>
+</body>
+</html>
