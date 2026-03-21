@@ -142,10 +142,10 @@
             setInterval(refreshData, 30000);
         };
 
-        // 核心函数：读取data.json并更新页面数据
+        // 核心函数：读取data.json并更新页面数据（适配Vercel public文件夹规则）
         function refreshData() {
-            // 关键路径：适配public文件夹，必须写全路径
-            const dataUrl = '/public/data.json';
+            // 关键修正：根路径 /data.json（Vercel会自动映射public/data.json到根路径）
+            const dataUrl = '/data.json';
             
             // 显示加载状态
             document.getElementById('temperature').textContent = '加载中...';
@@ -170,7 +170,10 @@
                     document.getElementById('humidity').textContent = data.humidity || '--';
                     document.getElementById('humidity').className = 'value';
                     
-                    document.getElementById('timestamp').textContent = data.timestamp || '未获取到更新时间';
+                    // 补充：自动生成时间戳（如果接口返回的timestamp为空）
+                    const now = new Date();
+                    const formattedTime = now.toLocaleString('zh-CN');
+                    document.getElementById('timestamp').textContent = data.timestamp || formattedTime;
                 })
                 .catch(error => {
                     // 错误处理
