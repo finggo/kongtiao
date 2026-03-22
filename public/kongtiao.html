@@ -170,27 +170,25 @@
         const API_BASE_URL = window.location.origin;
         const API_UPLOAD_URL = `${API_BASE_URL}/api/upload`;
         
-        // 本地缓存：记录最后一次真实数据（页面刷新不丢失）
-        let lastRealData = JSON.parse(localStorage.getItem('lastRealData')) || {
+        // 核心：本地永久缓存（即使浏览器重启、清除会话也保留）
+        let lastRealData = JSON.parse(localStorage.getItem('permanentRealData')) || {
             temperature: null,
             humidity: null,
             upload_time: null
         };
 
-        // 页面加载自动刷新 + 30秒定时刷新
+        // 页面加载直接显示本地缓存（不管后端有没有数据）
         window.onload = () => {
-            // 初始化显示最后一次缓存数据
-            if (lastRealData.temperature) {
-                updateUI(lastRealData, false);
-            }
+            // 优先显示本地永久缓存
+            updateUI(lastRealData, false);
+            // 再请求后端刷新（更新缓存）
             refreshData();
+            // 30秒定时刷新
             setInterval(refreshData, 30000);
         };
 
         /**
-         * 核心函数：更新UI显示
-         * @param {Object} data - 数据对象（包含Python上传的upload_time）
-         * @param {Boolean} isNewData - 是否是新的真实数据
+         * 核心函数：更新UI显示（优先用本地缓存）
          */
         function updateUI(data, isNewData = false) {
             const tempEl = document.getElementById('temperature');
@@ -199,34 +197,33 @@
             const timeContainer = document.getElementById('timestamp-container');
             const statusTag = document.getElementById('status-tag');
 
-            // 更新缓存（仅当是新的真实数据时）
+            // 只有拿到新数据时，才更新本地永久缓存
             if (isNewData && data.temperature) {
                 lastRealData = { ...data };
-                localStorage.setItem('lastRealData', JSON.stringify(lastRealData));
+                // 存到localStorage，永久保留（除非手动清除）
+                localStorage.setItem('permanentRealData', JSON.stringify(lastRealData));
             }
 
-            // 显示数据或无数据提示
-            if (data.temperature && data.humidity) {
-                // 有数据：显示Python上传的时间
-                tempEl.textContent = data.temperature;
+            // 显示逻辑：优先用本地缓存，无则显示暂无数据
+            const displayData = lastRealData.temperature ? lastRealData : data;
+
+            if (displayData.temperature && displayData.humidity) {
+                tempEl.textContent = displayData.temperature;
                 tempEl.className = 'value';
-                humiEl.textContent = data.humidity;
+                humiEl.textContent = displayData.humidity;
                 humiEl.className = 'value';
                 
-                // 非新数据时，添加「数据已停止更新」提示
                 if (isNewData) {
-                    timeEl.textContent = data.upload_time || '未知时间';
+                    timeEl.textContent = displayData.upload_time || '未知时间';
                     timeContainer.className = 'timestamp';
                 } else {
-                    timeEl.textContent = `${data.upload_time || '未知时间'}（数据已停止更新）`;
+                    timeEl.textContent = `${displayData.upload_time || '未知时间'}（本地缓存）`;
                     timeContainer.className = 'timestamp stop';
                 }
                 
-                // 更新状态标签
-                statusTag.textContent = isNewData ? '实时数据' : '最后缓存';
+                statusTag.textContent = isNewData ? '实时数据' : '本地缓存';
                 statusTag.className = `status-tag ${isNewData ? 'status-online' : 'status-offline'}`;
             } else {
-                // 无数据：显示提示
                 tempEl.textContent = '暂无数据';
                 tempEl.className = 'value empty';
                 humiEl.textContent = '暂无数据';
@@ -239,7 +236,7 @@
         }
 
         /**
-         * 核心函数：调用API获取数据（无模拟值，仅返回缓存）
+         * 核心函数：调用API获取数据（更新本地缓存）
          */
         function refreshData() {
             const tempEl = document.getElementById('temperature');
@@ -251,11 +248,11 @@
             humiEl.textContent = '加载中...';
             humiEl.className = 'value loading';
 
-            // 发起API请求（空数据请求，触发后端返回缓存）
+            // 发起API请求
             fetch(API_UPLOAD_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({}), // 空数据，不传递任何模拟值
+                body: JSON.stringify({}),
                 timeout: 8000
             })
             .then(res => {
@@ -265,13 +262,13 @@
             .then(result => {
                 const data = result.data || {};
                 const isNewData = result.hasRealData === true;
-                // 直接显示后端缓存的最后一次数据（不会变）
+                // 更新UI（自动更新本地缓存）
                 updateUI(data, isNewData);
                 console.log(`✅ 数据加载成功 | 新数据: ${isNewData}`, data);
             })
             .catch(err => {
-                // 接口异常：显示本地缓存的最后一次数据（不会变）
-                console.warn('⚠️ 接口异常，显示最后一次缓存数据:', err);
+                // 接口异常/后端缓存丢了 → 显示本地永久缓存
+                console.warn('⚠️ 接口异常，显示本地永久缓存:', err);
                 updateUI(lastRealData, false);
             });
         }
