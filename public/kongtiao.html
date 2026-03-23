@@ -158,7 +158,7 @@
         </div>
         
         <div class="timestamp" id="timestamp-container">
-            Python上传时间：<span id="timestamp">--</span>
+            上传时间：<span id="timestamp">--</span>
             <span id="status-tag" class="status-tag"></span>
         </div>
         
@@ -166,30 +166,20 @@
     </div>
 
     <script>
-        // 页面基础配置
-        const API_BASE_URL = window.location.origin;
-        const API_UPLOAD_URL = `${API_BASE_URL}/api/upload`;
-        
-        // 核心：本地永久缓存（即使浏览器重启、清除会话也保留）
+        // API路径直接用根路径，无需public前缀
+        const API_UPLOAD_URL = `${window.location.origin}/api/upload`;
         let lastRealData = JSON.parse(localStorage.getItem('permanentRealData')) || {
             temperature: null,
             humidity: null,
             upload_time: null
         };
 
-        // 页面加载直接显示本地缓存（不管后端有没有数据）
         window.onload = () => {
-            // 优先显示本地永久缓存
             updateUI(lastRealData, false);
-            // 再请求后端刷新（更新缓存）
             refreshData();
-            // 30秒定时刷新
             setInterval(refreshData, 30000);
         };
 
-        /**
-         * 核心函数：更新UI显示（优先用本地缓存）
-         */
         function updateUI(data, isNewData = false) {
             const tempEl = document.getElementById('temperature');
             const humiEl = document.getElementById('humidity');
@@ -197,14 +187,11 @@
             const timeContainer = document.getElementById('timestamp-container');
             const statusTag = document.getElementById('status-tag');
 
-            // 只有拿到新数据时，才更新本地永久缓存
             if (isNewData && data.temperature) {
                 lastRealData = { ...data };
-                // 存到localStorage，永久保留（除非手动清除）
                 localStorage.setItem('permanentRealData', JSON.stringify(lastRealData));
             }
 
-            // 显示逻辑：优先用本地缓存，无则显示暂无数据
             const displayData = lastRealData.temperature ? lastRealData : data;
 
             if (displayData.temperature && displayData.humidity) {
@@ -216,13 +203,14 @@
                 if (isNewData) {
                     timeEl.textContent = displayData.upload_time || '未知时间';
                     timeContainer.className = 'timestamp';
+                    statusTag.textContent = 'KV实时数据';
+                    statusTag.className = 'status-tag status-online';
                 } else {
                     timeEl.textContent = `${displayData.upload_time || '未知时间'}（本地缓存）`;
                     timeContainer.className = 'timestamp stop';
+                    statusTag.textContent = '本地缓存';
+                    statusTag.className = 'status-tag status-offline';
                 }
-                
-                statusTag.textContent = isNewData ? '实时数据' : '本地缓存';
-                statusTag.className = `status-tag ${isNewData ? 'status-online' : 'status-offline'}`;
             } else {
                 tempEl.textContent = '暂无数据';
                 tempEl.className = 'value empty';
@@ -231,44 +219,30 @@
                 timeEl.textContent = '从未上传过数据';
                 timeContainer.className = 'timestamp empty';
                 statusTag.textContent = '';
-                statusTag.className = 'status-tag';
             }
         }
 
-        /**
-         * 核心函数：调用API获取数据（更新本地缓存）
-         */
         function refreshData() {
             const tempEl = document.getElementById('temperature');
             const humiEl = document.getElementById('humidity');
             
-            // 显示加载状态
             tempEl.textContent = '加载中...';
             tempEl.className = 'value loading';
             humiEl.textContent = '加载中...';
             humiEl.className = 'value loading';
 
-            // 发起API请求
             fetch(API_UPLOAD_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({}),
                 timeout: 8000
             })
-            .then(res => {
-                if (!res.ok) throw new Error(`状态码: ${res.status}`);
-                return res.json();
-            })
+            .then(res => res.ok ? res.json() : Promise.reject())
             .then(result => {
-                const data = result.data || {};
-                const isNewData = result.hasRealData === true;
-                // 更新UI（自动更新本地缓存）
-                updateUI(data, isNewData);
-                console.log(`✅ 数据加载成功 | 新数据: ${isNewData}`, data);
+                updateUI(result.data || {}, result.hasRealData);
             })
             .catch(err => {
-                // 接口异常/后端缓存丢了 → 显示本地永久缓存
-                console.warn('⚠️ 接口异常，显示本地永久缓存:', err);
+                console.warn('接口异常，显示本地缓存:', err);
                 updateUI(lastRealData, false);
             });
         }
