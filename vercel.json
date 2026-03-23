@@ -1,11 +1,11 @@
 {
   "rewrites": [
     { "source": "/api/upload", "destination": "/api/upload.js" },
-    { "source": "/", "destination": "/kongtiao.html" }
+    { "source": "/", "destination": "/kongtiao.html" }  // 直接指向public下的文件，无需加public前缀
   ],
   "headers": [
     {
-      "source": "/data.json",
+      "source": "/(.*)",  // 对所有路径生效
       "headers": [
         { "key": "Access-Control-Allow-Origin", "value": "*" },
         { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
