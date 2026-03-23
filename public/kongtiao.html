@@ -82,14 +82,6 @@
             text-align: center;
         }
         
-        .timestamp.empty {
-            color: #dc3545;
-        }
-        
-        .timestamp.stop {
-            color: #ffc107;
-        }
-        
         .status-tag {
             display: inline-block;
             padding: 2px 8px;
@@ -102,11 +94,6 @@
         .status-online {
             background-color: #d4edda;
             color: #155724;
-        }
-        
-        .status-offline {
-            background-color: #f8d7da;
-            color: #721c24;
         }
         
         .refresh-btn {
@@ -126,15 +113,6 @@
         .refresh-btn:hover {
             background-color: #0056b3;
         }
-        
-        .refresh-btn:active {
-            background-color: #004085;
-        }
-        
-        .loading {
-            color: #9fadc7;
-            font-style: italic;
-        }
     </style>
 </head>
 <body>
@@ -144,7 +122,7 @@
         <div class="data-item">
             <span class="label">温度</span>
             <span>
-                <span id="temperature" class="value loading">加载中...</span>
+                <span id="temperature" class="value">加载中...</span>
                 <span class="unit">°C</span>
             </span>
         </div>
@@ -152,100 +130,74 @@
         <div class="data-item">
             <span class="label">湿度</span>
             <span>
-                <span id="humidity" class="value loading">加载中...</span>
+                <span id="humidity" class="value">加载中...</span>
                 <span class="unit">%</span>
             </span>
         </div>
         
-        <div class="timestamp" id="timestamp-container">
-            上传时间：<span id="timestamp">--</span>
-            <span id="status-tag" class="status-tag"></span>
+        <div class="timestamp">
+            最后上传时间：<span id="timestamp">--</span>
+            <span id="status" class="status-tag status-online"></span>
         </div>
         
-        <button class="refresh-btn" onclick="refreshData()">手动刷新数据</button>
+        <button class="refresh-btn" onclick="refreshData()">手动刷新</button>
     </div>
 
     <script>
-        // API路径直接用根路径，无需public前缀
-        const API_UPLOAD_URL = `${window.location.origin}/api/upload`;
-        let lastRealData = JSON.parse(localStorage.getItem('permanentRealData')) || {
+        // 核心：本地持久化存储（即使页面刷新/关闭也不丢失）
+        const STORAGE_KEY = 'esp32_sensor_data';
+        let currentData = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {
             temperature: null,
             humidity: null,
             upload_time: null
         };
 
-        window.onload = () => {
-            updateUI(lastRealData, false);
-            refreshData();
-            setInterval(refreshData, 30000);
-        };
+        // 初始化UI
+        updateUI(currentData);
+        // 立即刷新数据
+        refreshData();
+        // 30秒自动刷新
+        setInterval(refreshData, 30000);
 
-        function updateUI(data, isNewData = false) {
-            const tempEl = document.getElementById('temperature');
-            const humiEl = document.getElementById('humidity');
-            const timeEl = document.getElementById('timestamp');
-            const timeContainer = document.getElementById('timestamp-container');
-            const statusTag = document.getElementById('status-tag');
+        // 更新UI显示
+        function updateUI(data) {
+            document.getElementById('temperature').textContent = data.temperature || '暂无数据';
+            document.getElementById('humidity').textContent = data.humidity || '暂无数据';
+            document.getElementById('timestamp').textContent = data.upload_time || '从未上传';
+            document.getElementById('temperature').className = data.temperature ? 'value' : 'value empty';
+            document.getElementById('humidity').className = data.humidity ? 'value' : 'value empty';
+            document.getElementById('status').textContent = data.temperature ? '✅ 数据正常' : '❌ 等待上传';
+        }
 
-            if (isNewData && data.temperature) {
-                lastRealData = { ...data };
-                localStorage.setItem('permanentRealData', JSON.stringify(lastRealData));
-            }
-
-            const displayData = lastRealData.temperature ? lastRealData : data;
-
-            if (displayData.temperature && displayData.humidity) {
-                tempEl.textContent = displayData.temperature;
-                tempEl.className = 'value';
-                humiEl.textContent = displayData.humidity;
-                humiEl.className = 'value';
+        // 刷新数据（调用API）
+        async function refreshData() {
+            try {
+                const response = await fetch('/api/upload', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({}),
+                    timeout: 10000
+                });
                 
-                if (isNewData) {
-                    timeEl.textContent = displayData.upload_time || '未知时间';
-                    timeContainer.className = 'timestamp';
-                    statusTag.textContent = 'KV实时数据';
-                    statusTag.className = 'status-tag status-online';
-                } else {
-                    timeEl.textContent = `${displayData.upload_time || '未知时间'}（本地缓存）`;
-                    timeContainer.className = 'timestamp stop';
-                    statusTag.textContent = '本地缓存';
-                    statusTag.className = 'status-tag status-offline';
+                const result = await response.json();
+                // 如果有新数据，更新本地存储
+                if (result.hasRealData && result.data.temperature) {
+                    currentData = result.data;
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(currentData));
                 }
-            } else {
-                tempEl.textContent = '暂无数据';
-                tempEl.className = 'value empty';
-                humiEl.textContent = '暂无数据';
-                humiEl.className = 'value empty';
-                timeEl.textContent = '从未上传过数据';
-                timeContainer.className = 'timestamp empty';
-                statusTag.textContent = '';
+                updateUI(currentData);
+            } catch (error) {
+                console.log('使用本地缓存数据');
+                updateUI(currentData);
             }
         }
 
-        function refreshData() {
-            const tempEl = document.getElementById('temperature');
-            const humiEl = document.getElementById('humidity');
-            
-            tempEl.textContent = '加载中...';
-            tempEl.className = 'value loading';
-            humiEl.textContent = '加载中...';
-            humiEl.className = 'value loading';
-
-            fetch(API_UPLOAD_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({}),
-                timeout: 8000
-            })
-            .then(res => res.ok ? res.json() : Promise.reject())
-            .then(result => {
-                updateUI(result.data || {}, result.hasRealData);
-            })
-            .catch(err => {
-                console.warn('接口异常，显示本地缓存:', err);
-                updateUI(lastRealData, false);
-            });
-        }
+        // 监听Python上传的数据（新增：主动接收上传并更新）
+        window.uploadSensorData = function(temperature, humidity, upload_time) {
+            currentData = { temperature, humidity, upload_time };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(currentData));
+            updateUI(currentData);
+        };
     </script>
 </body>
 </html>
